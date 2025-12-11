@@ -73,11 +73,22 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
+  // You can set SKIP_VITE=true to bypass vite (useful if vite fails at runtime).
+  const skipVite = process.env.SKIP_VITE === "true";
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
-  } else {
+  } else if (!skipVite) {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
+  } else {
+    // In some dev environments Vite may not initialize correctly. When SKIP_VITE
+    // is set we fall back to serving a simple placeholder HTML page so the API
+    // remains available for development and testing.
+    app.use((_req, res) => {
+      res.set({ "Content-Type": "text/html" }).status(200).end(
+        `<!doctype html><html><head><meta charset="utf-8"><title>Backend</title></head><body><h1>Backend running (Vite skipped)</h1></body></html>`,
+      );
+    });
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT

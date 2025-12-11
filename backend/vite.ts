@@ -1,5 +1,5 @@
 import { type Express } from "express";
-import * as vite from "vite";
+// import vite dynamically to avoid ESM/CJS interop issues at runtime
 import { type Server } from "http";
 import fs from "fs";
 import path from "path";
@@ -38,7 +38,8 @@ export async function setupVite(server: Server, app: Express) {
     root: path.resolve(__dirname, '..', 'frontend'),
   } as const;
 
-  const viteServer = await vite.createServer({
+  const viteModule = await import("vite");
+  const viteServer = await viteModule.createServer({
     ...viteDevConfig,
     configFile: false,
     customLogger: {
