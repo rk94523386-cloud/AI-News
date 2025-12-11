@@ -1,0 +1,80 @@
+# ----------------------------
+#  Root .gitignore (for monorepo)
+#  Structure:
+#  /frontend
+#  /backend
+# ----------------------------
+
+# Node modules
+node_modules/
+**/node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.vercel/
+
+# TypeScript
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+.env.test
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+
+# Cache
+.cache/
+.parcel-cache/
+.next/
+.eslintcache
+stylelintcache/
+coverage/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Lockfiles (optional exclude)
+# Uncomment if you don't want to commit lock files:
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Build artifacts from backend
+backend/dist/
+backend/build/
+
+# Build artifacts from frontend
+frontend/dist/
+frontend/build/
+
+# Vite cache
+frontend/.vite/
+
+# Vercel project files
+.vercel/project.json

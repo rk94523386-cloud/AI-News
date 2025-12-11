@@ -1,0 +1,26 @@
+{
+  "name": "project2-backend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "NODE_ENV=development tsx index.ts",
+    "start": "node dist/index.cjs",
+    "build": "tsx ../script/build.ts"
+  },
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.2",
+    "axios": "^1.13.2",
+    "cheerio": "^1.1.2",
+    "express": "^5.2.1",
+    "nanoid": "^5.1.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
+  }
+}

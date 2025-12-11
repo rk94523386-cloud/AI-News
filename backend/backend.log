@@ -1,0 +1,10 @@
+nohup: ignoring input
+7:40:44 PM [express] serving on port 5000
+7:41:04 PM [express] GET /api/health 200 in 2ms :: {"status":"ok","timestamp":"2025-12-11T19:41:04.087Z"}
+[API] Manual scrape triggered via /api/trigger-scrape
+[2025-12-11T19:41:04.097Z] Cache cleared
+Error scraping Reuters for International: Request failed with status code 401
+[API] Cache empty on /api/scrape-all - performing initial scrape
+Error scraping Reuters for International: Request failed with status code 401
+[2025-12-11T19:42:08.424Z] Scrape completed: 157 articles. Cache updated.
+[2025-12-11T19:42:27.817Z] Scrape completed: 157 articles. Cache updated.
