@@ -1,6 +1,7 @@
 import { Article, Category } from "./mockData";
 
-const API_BASE = "/api";
+// Use environment variable for backend URL, defaults to /api for same-origin
+const API_BASE = import.meta.env.VITE_BACKEND_URL || "/api";
 
 // Fetch articles from cache (no scraping on page load)
 export async function fetchArticlesFromAPI(category?: Category): Promise<Article[]> {
