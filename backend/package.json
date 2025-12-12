@@ -5,22 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development tsx index.ts",
-    "start": "tsx index.ts",
-    "build": "tsx ../script/build.ts"
+    "build": "echo 'noop'",
+    "start": "tsx index.ts"
   },
-  "main": "index.js",
+  "main": "index.ts",
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@vitejs/plugin-react": "^5.1.2",
     "axios": "^1.13.2",
     "cheerio": "^1.1.2",
     "express": "^5.2.1",
     "nanoid": "^5.1.6",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
-    "vite": "^7.2.7"
+    "tsx": "^4.21.0"
   }
 }

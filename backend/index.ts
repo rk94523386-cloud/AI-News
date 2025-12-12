@@ -2,6 +2,12 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const httpServer = createServer(app);
@@ -76,7 +82,12 @@ app.use((req, res, next) => {
   // You can set SKIP_VITE=true to bypass vite (useful if vite fails at runtime).
   const skipVite = process.env.SKIP_VITE === "true";
   if (process.env.NODE_ENV === "production") {
-    serveStatic(app);
+    const distPath = path.resolve(__dirname, "public");
+    if (fs.existsSync(distPath)) {
+      serveStatic(app);
+    } else {
+      log(`No static build found at ${distPath}; skipping static file serving`, "express");
+    }
   } else if (!skipVite) {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
