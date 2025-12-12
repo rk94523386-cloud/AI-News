@@ -1,53 +1,4 @@
 import express, { type Request, Response, NextFunction } from "express";
-// dynamic import of routes to handle Vercel's compiled output where files
-// may be emitted as .js. Use .js extension in production/VERCEL to ensure
-// runtime resolution works when bundlers output ESM .js files.
-let registerRoutes: typeof import("./routes").registerRoutes;
-if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
-  // runtime environment likely has .js outputs
-  try {
-    // @ts-ignore - dynamic import of compiled .js
-    const mod = await import("./routes.js");
-    registerRoutes = mod.registerRoutes;
-  } catch (err) {
-    // fallback to importing TS source (some environments keep .ts files)
-    // @ts-ignore
-    const mod = await import("./routes");
-    registerRoutes = mod.registerRoutes;
-  }
-} else {
-  // development: import TS sources directly
-  // @ts-ignore - dynamic import
-  const mod = await import("./routes");
-  registerRoutes = mod.registerRoutes;
-}
-// declare serveStatic before attempting to import it
-let serveStatic: typeof import("./static").serveStatic | undefined;
-
-// dynamic import serveStatic similarly
-try {
-  if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
-    try {
-      // @ts-ignore
-      const s = await import("./static.js");
-      serveStatic = s.serveStatic;
-    } catch (_e) {
-      // fallback
-      // @ts-ignore
-      const s = await import("./static");
-      serveStatic = s.serveStatic;
-    }
-  } else {
-    // dev
-    // @ts-ignore
-    const s = await import("./static");
-    serveStatic = s.serveStatic;
-  }
-} catch (err) {
-  // if static cannot be loaded, leave undefined (we'll skip static serving)
-  console.warn("Could not load static serving module:", (err as Error).message);
-  serveStatic = undefined;
-}
 import { createServer } from "http";
 import fs from "fs";
 import path from "path";
@@ -55,6 +6,10 @@ import { fileURLToPath } from "url";
 import helmet from "helmet";
 import morgan from "morgan";
 import serverless from "serverless-http";
+
+// Track initialization state to avoid duplicate initialization
+let initializationPromise: Promise<void> | null = null;
+let routesRegistered = false;
 
 let __filename = "";
 let __dirname = "";
@@ -109,9 +64,114 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+// Initialize routes, vite, static serving on first request (lazy init)
+// This avoids blocking serverless handler export.
+async function initializeApp() {
+  if (routesRegistered) return;
+  if (initializationPromise) return initializationPromise;
+
+  initializationPromise = (async () => {
+    try {
+      // Dynamically import routes with fallback to .js extension for Vercel
+      let registerRoutes: typeof import("./routes").registerRoutes;
+      if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
+        try {
+          // @ts-ignore
+          const mod = await import("./routes.js");
+          registerRoutes = mod.registerRoutes;
+        } catch {
+          // @ts-ignore
+          const mod = await import("./routes");
+          registerRoutes = mod.registerRoutes;
+        }
+      } else {
+        // @ts-ignore
+        const mod = await import("./routes");
+        registerRoutes = mod.registerRoutes;
+      }
+
+      // Register routes
+      await registerRoutes(app);
+
+      // Setup static serving in production
+      if (process.env.NODE_ENV === "production") {
+        try {
+          let serveStatic: typeof import("./static").serveStatic | undefined;
+          if (process.env.VERCEL === "1") {
+            try {
+              // @ts-ignore
+              const s = await import("./static.js");
+              serveStatic = s.serveStatic;
+            } catch {
+              // @ts-ignore
+              const s = await import("./static");
+              serveStatic = s.serveStatic;
+            }
+          } else {
+            // @ts-ignore
+            const s = await import("./static");
+            serveStatic = s.serveStatic;
+          }
+
+          const distPath = path.resolve(__dirname, "public");
+          if (serveStatic && fs.existsSync(distPath)) {
+            serveStatic(app);
+          }
+        } catch (err) {
+          log(`Could not load static: ${(err as Error).message}`, "express");
+        }
+      } else if (process.env.SKIP_VITE !== "true") {
+        // Setup Vite in dev (non-blocking)
+        try {
+          const { setupVite } = await import("./vite");
+          await setupVite(httpServer, app);
+        } catch (err) {
+          log(`Vite dev middleware failed: ${(err as Error).message}. Falling back.`, "express");
+        }
+      }
+
+      // Add fallback catch-all handler if Vite didn't load
+      if (process.env.SKIP_VITE === "true" || process.env.NODE_ENV === "production") {
+        app.use((_req, res) => {
+          res.set({ "Content-Type": "text/html" }).status(200).end(
+            `<!doctype html><html><head><meta charset="utf-8"><title>Backend</title></head><body><h1>Backend API</h1></body></html>`,
+          );
+        });
+      }
+
+      // Error handler
+      app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+        const status = err?.status || err?.statusCode || 500;
+        const message = err?.message || "Internal Server Error";
+        console.error("[ERROR]", err);
+        res.status(status).json({ message });
+      });
+
+      routesRegistered = true;
+      log("App initialized", "express");
+    } catch (err) {
+      console.error("Fatal error during app init:", err);
+      throw err;
+    }
+  })();
+
+  await initializationPromise;
+}
+
+// Middleware to lazily initialize app on first request
+app.use(async (req, res, next) => {
+  try {
+    await initializeApp();
+    next();
+  } catch (err) {
+    res.status(500).json({ error: "Failed to initialize app" });
+  }
+});
+
+// Request logging middleware (after lazy init middleware)
 app.use((req, res, next) => {
   const start = Date.now();
-  const path = req.path;
+  const routePath = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -122,8 +182,8 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+    if (routePath.startsWith("/api")) {
+      let logLine = `${req.method} ${routePath} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
@@ -135,71 +195,23 @@ app.use((req, res, next) => {
   next();
 });
 
-await registerRoutes(app);
+// Standalone server mode (for local development)
+const runStandalone = process.env.RUN_STANDALONE === "true" || process.env.VERCEL !== "1";
+if (runStandalone) {
+  const port = parseInt(process.env.PORT || "5000", 10);
+  httpServer.listen(
+    {
+      port,
+      host: "0.0.0.0",
+      reusePort: true,
+    },
+    () => {
+      log(`serving on port ${port}`);
+    },
+  );
+}
 
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  const status = err?.status || err?.statusCode || 500;
-  const message = err?.message || "Internal Server Error";
-  console.error("[ERROR]", err);
-  res.status(status).json({ message });
-});
-
-// importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  // You can set SKIP_VITE=true to bypass vite (useful if vite fails at runtime).
-  const skipVite = process.env.SKIP_VITE === "true";
-  if (process.env.NODE_ENV === "production") {
-    const distPath = path.resolve(__dirname, "public");
-    if (fs.existsSync(distPath)) {
-      serveStatic(app);
-    } else {
-      log(`No static build found at ${distPath}; skipping static file serving`, "express");
-    }
-  } else if (!skipVite) {
-    try {
-      const { setupVite } = await import("./vite");
-      await setupVite(httpServer, app);
-    } catch (err) {
-      log(`Vite dev middleware failed to start: ${(err as Error).message}. Falling back.`, "express");
-    }
-  } else {
-    // In some dev environments Vite may not initialize correctly. When SKIP_VITE
-    // is set we fall back to serving a simple placeholder HTML page so the API
-    // remains available for development and testing.
-    app.use((_req, res) => {
-      res.set({ "Content-Type": "text/html" }).status(200).end(
-        `<!doctype html><html><head><meta charset="utf-8"><title>Backend</title></head><body><h1>Backend running (Vite skipped)</h1></body></html>`,
-      );
-    });
-  }
-
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  // If this process is running as a standalone server (development)
-  // or if explicitly requested via RUN_STANDALONE=true, start listening.
-  const runStandalone = process.env.RUN_STANDALONE === "true" || process.env.VERCEL !== "1";
-
-  if (runStandalone) {
-    const port = parseInt(process.env.PORT || "5000", 10);
-    httpServer.listen(
-      {
-        port,
-        host: "0.0.0.0",
-        reusePort: true,
-      },
-      () => {
-        log(`serving on port ${port}`);
-      },
-    );
-  }
-
-  // Export a serverless handler for platforms like Vercel
-  // so Vercel can import this module and receive the handler.
-  // @ts-ignore
-  const exported = serverless(app as any);
-  // default export for serverless platforms
-  // eslint-disable-next-line import/no-default-export
-  export default exported;
+// Export serverless handler for Vercel (this exports immediately, no await)
+const exported = serverless(app as any);
+// eslint-disable-next-line import/no-default-export
+export default exported;
