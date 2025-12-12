@@ -1,5 +1,20 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+// dynamic import of routes to handle Vercel's compiled output where files
+// may be emitted as .js. Use .js extension in production/VERCEL to ensure
+// runtime resolution works when bundlers output ESM .js files.
+let registerRoutes: typeof import("./routes").registerRoutes;
+if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
+  // runtime environment likely has .js outputs
+  // using top-level await (Node 16+/20+) is supported in this project
+  // @ts-ignore - dynamic import
+  const mod = await import("./routes.js");
+  registerRoutes = mod.registerRoutes;
+} else {
+  // development: import TS sources directly
+  // @ts-ignore - dynamic import
+  const mod = await import("./routes");
+  registerRoutes = mod.registerRoutes;
+}
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import fs from "fs";
