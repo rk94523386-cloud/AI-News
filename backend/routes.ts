@@ -1,5 +1,4 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
 import { 
   scrapeArticles,
   getCachedArticles,
@@ -9,10 +8,7 @@ import {
   type Category 
 } from "./scraper";
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
+export async function registerRoutes(app: Express): Promise<void> {
   
   // Health check endpoint
   app.get("/api/health", async (req, res) => {
@@ -194,5 +190,5 @@ export async function registerRoutes(
     }
   });
 
-  return httpServer;
+  return;
 }

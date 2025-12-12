@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development tsx index.ts",
-    "build": "mkdir -p dist && cp index.ts routes.ts scraper.ts storage.ts static.ts dist/",
-    "start": "tsx dist/index.ts"
+    "build": "echo \"Vercel uses @vercel/node to build TypeScript serverless functions; no local build step required.\"",
+    "start": "RUN_STANDALONE=true NODE_ENV=production tsx index.ts"
   },
-  "main": "dist/index.ts",
+  "main": "index.ts",
+  "engines": {
+    "node": "20.x"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -18,6 +21,9 @@
     "cheerio": "^1.1.2",
     "express": "^5.2.1",
     "nanoid": "^5.1.6",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "helmet": "^7.0.0",
+    "morgan": "^1.10.0",
+    "serverless-http": "^3.0.0"
   }
 }

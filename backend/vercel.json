@@ -1,6 +1,10 @@
 {
   "version": 2,
-  "buildCommand": "mkdir -p dist && cp index.ts routes.ts scraper.ts storage.ts static.ts dist/",
-  "outputDirectory": "dist",
-  "framework": "express"
+  "builds": [
+    { "src": "index.ts", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/index.ts" },
+    { "src": "/(.*)", "dest": "/index.ts" }
+  ]
 }

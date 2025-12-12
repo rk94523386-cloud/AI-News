@@ -5,6 +5,9 @@ import { createServer } from "http";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import helmet from "helmet";
+import morgan from "morgan";
+import serverless from "serverless-http";
 
 let __filename = "";
 let __dirname = "";
@@ -29,9 +32,18 @@ declare module "http" {
   }
 }
 
+// Security headers
+app.use(helmet());
+
+// Request logging
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+
 app.use(
   express.json({
     verify: (req, _res, buf) => {
+      // retain raw body for any webhook verifications
+      // attach to request as rawBody
+      // @ts-ignore
       req.rawBody = buf;
     },
   }),
@@ -76,18 +88,16 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
-  await registerRoutes(httpServer, app);
+await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  const status = err?.status || err?.statusCode || 500;
+  const message = err?.message || "Internal Server Error";
+  console.error("[ERROR]", err);
+  res.status(status).json({ message });
+});
 
-    res.status(status).json({ message });
-    throw err;
-  });
-
-  // importantly only setup vite in development and after
+// importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   // You can set SKIP_VITE=true to bypass vite (useful if vite fails at runtime).
@@ -100,8 +110,12 @@ app.use((req, res, next) => {
       log(`No static build found at ${distPath}; skipping static file serving`, "express");
     }
   } else if (!skipVite) {
-    const { setupVite } = await import("./vite");
-    await setupVite(httpServer, app);
+    try {
+      const { setupVite } = await import("./vite");
+      await setupVite(httpServer, app);
+    } catch (err) {
+      log(`Vite dev middleware failed to start: ${(err as Error).message}. Falling back.`, "express");
+    }
   } else {
     // In some dev environments Vite may not initialize correctly. When SKIP_VITE
     // is set we fall back to serving a simple placeholder HTML page so the API
@@ -117,15 +131,28 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
-})();
+  // If this process is running as a standalone server (development)
+  // or if explicitly requested via RUN_STANDALONE=true, start listening.
+  const runStandalone = process.env.RUN_STANDALONE === "true" || process.env.VERCEL !== "1";
+
+  if (runStandalone) {
+    const port = parseInt(process.env.PORT || "5000", 10);
+    httpServer.listen(
+      {
+        port,
+        host: "0.0.0.0",
+        reusePort: true,
+      },
+      () => {
+        log(`serving on port ${port}`);
+      },
+    );
+  }
+
+  // Export a serverless handler for platforms like Vercel
+  // so Vercel can import this module and receive the handler.
+  // @ts-ignore
+  const exported = serverless(app as any);
+  // default export for serverless platforms
+  // eslint-disable-next-line import/no-default-export
+  export default exported;
