@@ -5,17 +5,49 @@ import express, { type Request, Response, NextFunction } from "express";
 let registerRoutes: typeof import("./routes").registerRoutes;
 if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
   // runtime environment likely has .js outputs
-  // using top-level await (Node 16+/20+) is supported in this project
-  // @ts-ignore - dynamic import
-  const mod = await import("./routes.js");
-  registerRoutes = mod.registerRoutes;
+  try {
+    // @ts-ignore - dynamic import of compiled .js
+    const mod = await import("./routes.js");
+    registerRoutes = mod.registerRoutes;
+  } catch (err) {
+    // fallback to importing TS source (some environments keep .ts files)
+    // @ts-ignore
+    const mod = await import("./routes");
+    registerRoutes = mod.registerRoutes;
+  }
 } else {
   // development: import TS sources directly
   // @ts-ignore - dynamic import
   const mod = await import("./routes");
   registerRoutes = mod.registerRoutes;
 }
-import { serveStatic } from "./static";
+// declare serveStatic before attempting to import it
+let serveStatic: typeof import("./static").serveStatic | undefined;
+
+// dynamic import serveStatic similarly
+try {
+  if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
+    try {
+      // @ts-ignore
+      const s = await import("./static.js");
+      serveStatic = s.serveStatic;
+    } catch (_e) {
+      // fallback
+      // @ts-ignore
+      const s = await import("./static");
+      serveStatic = s.serveStatic;
+    }
+  } else {
+    // dev
+    // @ts-ignore
+    const s = await import("./static");
+    serveStatic = s.serveStatic;
+  }
+} catch (err) {
+  // if static cannot be loaded, leave undefined (we'll skip static serving)
+  console.warn("Could not load static serving module:", (err as Error).message);
+  serveStatic = undefined;
+}
 import { createServer } from "http";
 import fs from "fs";
 import path from "path";

@@ -9,7 +9,7 @@ async function start() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 
-  await registerRoutes(server, app);
+  await registerRoutes(app);
 
   const port = parseInt(process.env.PORT || "5000", 10);
   server.listen(port, "0.0.0.0", () => console.log(`dev-no-vite listening on ${port}`));
