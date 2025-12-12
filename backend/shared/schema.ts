@@ -1,18 +1,12 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
+// Lightweight runtime-safe schema types used by `storage.ts`.
+// Removed runtime dependencies on Drizzle/Zod so the backend can run
+// in serverless environments without pulling DB libraries.
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-});
+export type InsertUser = {
+  username: string;
+  password: string;
+};
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export type User = InsertUser & {
+  id: string;
+};

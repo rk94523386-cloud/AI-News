@@ -1,12 +1,24 @@
 import type { Express } from "express";
-import { 
+// Dynamically import scraper so that production (compiled .js) resolution
+// uses the correct extension. This avoids ERR_MODULE_NOT_FOUND on Vercel
+// where the runtime files are emitted as .js.
+let scraperModule: typeof import("./scraper");
+if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
+  // @ts-ignore
+  scraperModule = await import("./scraper.js");
+} else {
+  // @ts-ignore
+  scraperModule = await import("./scraper");
+}
+
+const {
   scrapeArticles,
   getCachedArticles,
   getArticleById,
   hasCachedArticles,
   clearCache,
-  type Category 
-} from "./scraper";
+} = scraperModule;
+export type { Category } from "./scraper";
 
 export async function registerRoutes(app: Express): Promise<void> {
   
