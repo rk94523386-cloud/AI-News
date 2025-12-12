@@ -2,5 +2,6 @@
   "version": 2,
   "buildCommand": "npx esbuild index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.cjs --external:./vite --external:./vite.ts",
   "outputDirectory": "dist",
-  "framework": "express"
+  "framework": "express",
+  "entrypoint": "dist/index.cjs"
 }
