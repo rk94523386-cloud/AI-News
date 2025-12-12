@@ -64,109 +64,101 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-// Initialize routes, vite, static serving on first request (lazy init)
-// This avoids blocking serverless handler export.
-async function initializeApp() {
-  if (routesRegistered) return;
-  if (initializationPromise) return initializationPromise;
+// Immediate health check endpoint (responds without waiting for full init)
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
-  initializationPromise = (async () => {
-    try {
-      // Dynamically import routes with fallback to .js extension for Vercel
-      let registerRoutes: typeof import("./routes").registerRoutes;
-      if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
-        try {
-          // @ts-ignore
-          const mod = await import("./routes.js");
-          registerRoutes = mod.registerRoutes;
-        } catch {
-          // @ts-ignore
-          const mod = await import("./routes");
-          registerRoutes = mod.registerRoutes;
-        }
-      } else {
+// Start initialization in the background (non-blocking)
+// This runs asynchronously so the handler can export immediately
+async function initializeAppAsync() {
+  try {
+    // Dynamically import routes with fallback to .js extension for Vercel
+    let registerRoutes: typeof import("./routes").registerRoutes;
+    if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
+      try {
+        // @ts-ignore
+        const mod = await import("./routes.js");
+        registerRoutes = mod.registerRoutes;
+      } catch {
         // @ts-ignore
         const mod = await import("./routes");
         registerRoutes = mod.registerRoutes;
       }
+    } else {
+      // @ts-ignore
+      const mod = await import("./routes");
+      registerRoutes = mod.registerRoutes;
+    }
 
-      // Register routes
-      await registerRoutes(app);
+    // Register routes
+    await registerRoutes(app);
+    log("Routes registered", "express");
 
-      // Setup static serving in production
-      if (process.env.NODE_ENV === "production") {
-        try {
-          let serveStatic: typeof import("./static").serveStatic | undefined;
-          if (process.env.VERCEL === "1") {
-            try {
-              // @ts-ignore
-              const s = await import("./static.js");
-              serveStatic = s.serveStatic;
-            } catch {
-              // @ts-ignore
-              const s = await import("./static");
-              serveStatic = s.serveStatic;
-            }
-          } else {
+    // Setup static serving in production
+    if (process.env.NODE_ENV === "production") {
+      try {
+        let serveStatic: typeof import("./static").serveStatic | undefined;
+        if (process.env.VERCEL === "1") {
+          try {
+            // @ts-ignore
+            const s = await import("./static.js");
+            serveStatic = s.serveStatic;
+          } catch {
             // @ts-ignore
             const s = await import("./static");
             serveStatic = s.serveStatic;
           }
-
-          const distPath = path.resolve(__dirname, "public");
-          if (serveStatic && fs.existsSync(distPath)) {
-            serveStatic(app);
-          }
-        } catch (err) {
-          log(`Could not load static: ${(err as Error).message}`, "express");
+        } else {
+          // @ts-ignore
+          const s = await import("./static");
+          serveStatic = s.serveStatic;
         }
-      } else if (process.env.SKIP_VITE !== "true") {
-        // Setup Vite in dev (non-blocking)
-        try {
-          const { setupVite } = await import("./vite");
-          await setupVite(httpServer, app);
-        } catch (err) {
-          log(`Vite dev middleware failed: ${(err as Error).message}. Falling back.`, "express");
+
+        const distPath = path.resolve(__dirname, "public");
+        if (serveStatic && fs.existsSync(distPath)) {
+          serveStatic(app);
+          log("Static files configured", "express");
         }
+      } catch (err) {
+        log(`Could not load static: ${(err as Error).message}`, "express");
       }
-
-      // Add fallback catch-all handler if Vite didn't load
-      if (process.env.SKIP_VITE === "true" || process.env.NODE_ENV === "production") {
-        app.use((_req, res) => {
-          res.set({ "Content-Type": "text/html" }).status(200).end(
-            `<!doctype html><html><head><meta charset="utf-8"><title>Backend</title></head><body><h1>Backend API</h1></body></html>`,
-          );
-        });
+    } else if (process.env.SKIP_VITE !== "true") {
+      // Setup Vite in dev (non-blocking)
+      try {
+        const { setupVite } = await import("./vite");
+        await setupVite(httpServer, app);
+        log("Vite dev middleware configured", "express");
+      } catch (err) {
+        log(`Vite dev middleware failed: ${(err as Error).message}. Falling back.`, "express");
       }
-
-      // Error handler
-      app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-        const status = err?.status || err?.statusCode || 500;
-        const message = err?.message || "Internal Server Error";
-        console.error("[ERROR]", err);
-        res.status(status).json({ message });
-      });
-
-      routesRegistered = true;
-      log("App initialized", "express");
-    } catch (err) {
-      console.error("Fatal error during app init:", err);
-      throw err;
     }
-  })();
 
-  await initializationPromise;
+    // Add fallback catch-all handler if Vite didn't load
+    if (process.env.SKIP_VITE === "true" || process.env.NODE_ENV === "production") {
+      app.use((_req, res) => {
+        res.set({ "Content-Type": "text/html" }).status(200).end(
+          `<!doctype html><html><head><meta charset="utf-8"><title>Backend API</title></head><body><h1>Backend API Running</h1></body></html>`,
+        );
+      });
+    }
+
+    // Error handler (added last)
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err?.status || err?.statusCode || 500;
+      const message = err?.message || "Internal Server Error";
+      console.error("[ERROR]", err);
+      res.status(status).json({ message });
+    });
+
+    log("App fully initialized", "express");
+  } catch (err) {
+    console.error("Fatal error during app init:", err);
+  }
 }
 
-// Middleware to lazily initialize app on first request
-app.use(async (req, res, next) => {
-  try {
-    await initializeApp();
-    next();
-  } catch (err) {
-    res.status(500).json({ error: "Failed to initialize app" });
-  }
-});
+// Start initialization in background immediately (fire and forget)
+initializeAppAsync();
 
 // Request logging middleware (after lazy init middleware)
 app.use((req, res, next) => {
