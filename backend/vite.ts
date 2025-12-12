@@ -11,6 +11,15 @@ const viteLogger = {
   error: (msg: unknown, _options?: unknown) => {
     console.error(msg);
   },
+  warn: (msg: unknown, _options?: unknown) => {
+    console.warn(msg);
+  },
+  info: (msg: unknown, _options?: unknown) => {
+    console.info(msg);
+  },
+  clear: () => {
+    // no-op: keep console output stable in this environment
+  },
 };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -39,7 +48,11 @@ export async function setupVite(server: Server, app: Express) {
   } as const;
 
   const viteModule = await import("vite");
-  const viteServer = await viteModule.createServer({
+  const createServerFn = (viteModule as any).createServer ?? (viteModule as any).default?.createServer;
+  if (!createServerFn) {
+    throw new Error('Could not locate Vite createServer function (interop failure)');
+  }
+  const viteServer = await createServerFn({
     ...viteDevConfig,
     configFile: false,
     customLogger: {
