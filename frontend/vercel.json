@@ -1,6 +1,5 @@
 {
   "version": 2,
   "buildCommand": "vite build",
-  "outputDirectory": "dist/public",
-  "framework": "vite"
+  "outputDirectory": "dist/public"
 }
