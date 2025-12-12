@@ -22,8 +22,18 @@ const viteLogger = {
   },
 };
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let __filename = "";
+let __dirname = "";
+try {
+  __filename = fileURLToPath(import.meta.url);
+  __dirname = path.dirname(__filename);
+} catch {
+  // commonjs fallback
+  // @ts-ignore
+  __filename = typeof __filename !== 'undefined' ? __filename : '';
+  // @ts-ignore
+  __dirname = typeof __dirname !== 'undefined' ? __dirname : '';
+}
 
 export async function setupVite(server: Server, app: Express) {
   const serverOptions = {

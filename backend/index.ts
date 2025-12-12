@@ -6,8 +6,19 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let __filename = "";
+let __dirname = "";
+try {
+  // ESM environment
+  __filename = fileURLToPath(import.meta.url);
+  __dirname = path.dirname(__filename);
+} catch {
+  // CommonJS fallback (Node provides globals)
+  // @ts-ignore
+  __filename = typeof __filename !== "undefined" ? __filename : "";
+  // @ts-ignore
+  __dirname = typeof __dirname !== "undefined" ? __dirname : "";
+}
 
 const app = express();
 const httpServer = createServer(app);
