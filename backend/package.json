@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development tsx index.ts",
-    "build": "npx esbuild index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.js --external:./vite --external:./vite.ts",
-    "start": "node dist/index.js"
+    "build": "mkdir -p dist && cp index.ts routes.ts scraper.ts storage.ts static.ts dist/",
+    "start": "tsx dist/index.ts"
   },
-  "main": "dist/index.js",
+  "main": "dist/index.ts",
   "keywords": [],
   "author": "",
   "license": "ISC",
