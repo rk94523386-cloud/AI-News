@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
+  "buildCommand": "mkdir -p dist && cp index.ts dist/index.ts",
   "outputDirectory": "dist",
   "framework": "express"
 }
